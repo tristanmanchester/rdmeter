@@ -1,0 +1,1 @@
+This small project is to create a C++ command-line tool named `rdmeter` for video codec analysis. Its primary purpose is to compute Rate-Distortion (RD) metrics, which are useful for evaluating and comparing the efficiency of various video encoders.

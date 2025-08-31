@@ -1,0 +1,10 @@
+[project]
+authors = ["Tristan Manchester <tristan.manchester@diamond.ac.uk>"]
+channels = ["conda-forge"]
+name = "rdmeter"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
