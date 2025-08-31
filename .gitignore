@@ -1,5 +1,3 @@
-project-idea.md
-
 # --- C++ / CMake ---
 build/
 cmake-build-*/
@@ -42,6 +40,12 @@ htmlcov/
 dmypy.json
 pixi.lock
 .pixi/
+
+# --- Test files and outputs ---
+test_videos/
+results/
+results.json
+project-idea.md
 
 # --- IDE / OS ---
 .vscode/
