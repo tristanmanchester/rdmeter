@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <chrono>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -27,6 +28,7 @@ int main(int argc, char** argv) {
     int width = 0;
     int height = 0;
     int max_frames = -1;  // all frames
+    std::vector<std::string> metrics = {"psnr"};  // default to PSNR only
 
     compute_cmd->add_option("-r,--ref", ref_file, "Path to reference YUV file")->required();
     compute_cmd->add_option("-d,--dist", dist_file, "Path to distorted YUV file")->required();
@@ -34,6 +36,7 @@ int main(int argc, char** argv) {
     compute_cmd->add_option("--width", width, "Video width in pixels")->required();
     compute_cmd->add_option("--height", height, "Video height in pixels")->required();
     compute_cmd->add_option("-f,--frames", max_frames, "Maximum number of frames to process (-1 for all)");
+    compute_cmd->add_option("-m,--metrics", metrics, "Metrics to compute (psnr, msssim)")->expected(-1);
 
     auto bdrate_cmd = app.add_subcommand("bdrate", "Calculate BD-Rate from two CSV files");
     std::string ref_csv;
@@ -90,13 +93,50 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Compute metrics (psnr) for each frame
+            // Expand comma-separated metrics
+            std::vector<std::string> expanded_metrics;
+            for (const auto& metric : metrics) {
+                if (metric.find(',') != std::string::npos) {
+                    // Split by comma
+                    size_t start = 0;
+                    size_t end = metric.find(',');
+                    while (end != std::string::npos) {
+                        expanded_metrics.push_back(metric.substr(start, end - start));
+                        start = end + 1;
+                        end = metric.find(',', start);
+                    }
+                    expanded_metrics.push_back(metric.substr(start));
+                } else {
+                    expanded_metrics.push_back(metric);
+                }
+            }
+            
+            // Determine which metrics to compute
+            bool compute_psnr = std::find(expanded_metrics.begin(), expanded_metrics.end(), "psnr") != expanded_metrics.end();
+            bool compute_msssim = std::find(expanded_metrics.begin(), expanded_metrics.end(), "msssim") != expanded_metrics.end();
+            
+            // Check if the image is large enough for MS-SSIM if requested
+            if (compute_msssim && (width < 32 || height < 32)) {
+                throw std::runtime_error("Image too small for MS-SSIM calculation (minimum 32x32 required)");
+            }
+
+            // Compute metrics for each frame
             double total_psnr = 0.0;
+            double total_msssim = 0.0;
             int valid_frames = 0;
+            
             for (int i = 0; i < frame_count; ++i) {
                 try {
-                    double psnr = rdmeter::psnr_y(ref_frames[i].y, dist_frames[i].y, width, height);
-                    total_psnr += psnr;
+                    if (compute_psnr) {
+                        double psnr = rdmeter::psnr_y(ref_frames[i].y, dist_frames[i].y, width, height);
+                        total_psnr += psnr;
+                    }
+                    
+                    if (compute_msssim) {
+                        double msssim = rdmeter::msssim_y(ref_frames[i].y, dist_frames[i].y, width, height);
+                        total_msssim += msssim;
+                    }
+                    
                     ++valid_frames;
                 } catch (const std::invalid_argument& e) {
                     if (verbose) {
@@ -105,25 +145,41 @@ int main(int argc, char** argv) {
                 }
             }
 
-            double avg_psnr = (valid_frames > 0) ? total_psnr / valid_frames : 0.0;
+            double avg_psnr = (valid_frames > 0 && compute_psnr) ? total_psnr / valid_frames : 0.0;
+            double avg_msssim = (valid_frames > 0 && compute_msssim) ? total_msssim / valid_frames : 0.0;
+            
 
             // end timer and print results
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
             std::cout << "Processed " << frame_count << " frames" << std::endl;
-            std::cout << "Average PSNR (Y): " << avg_psnr << " dB" << std::endl;
+            
+            if (compute_psnr) {
+                std::cout << "Average PSNR (Y): " << avg_psnr << " dB" << std::endl;
+            }
+            if (compute_msssim) {
+                std::cout << "Average MS-SSIM (Y): " << avg_msssim << std::endl;
+            }
+            
             std::cout << "Processing time: " << duration.count() << " ms" << std::endl;
             if (verbose) {
                 std::cout << "Results written to " << output_file << std::endl;
+            }
+
+            // Build metrics JSON object
+            nlohmann::json metrics_json;
+            if (compute_psnr) {
+                metrics_json["psnr_y"] = avg_psnr;
+            }
+            if (compute_msssim) {
+                metrics_json["msssim_y"] = avg_msssim;
             }
 
             nlohmann::json results = {
                 {"frame_count", frame_count},
                 {"width", width},
                 {"height", height},
-                {"metrics", {
-                    {"psnr_y", avg_psnr}
-                }}
+                {"metrics", metrics_json}
             };
 
             // Create output directory and write output

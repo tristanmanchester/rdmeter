@@ -1,34 +1,32 @@
 # rdmeter
 
-This small project is to create a C++ command-line tool named `rdmeter` for video codec analysis. Its primary purpose is to compute Rate-Distortion (RD) metrics, which are useful for evaluating and comparing the efficiency of various video encoders.
+C++ tool for computing video quality metrics (PSNR, MS-SSIM).
 
 ## Build
 
-From the project root:
-
 ```bash
-mkdir build
-cd build
-cmake ..
-cmake --build . --parallel
+cmake -B build
+cmake --build build
 ```
 
-## Run
-
-From the project root:
+## Usage
 
 ```bash
-./build/rdmeter compute --ref path/to/reference.yuv --dist path/to/distorted.yuv --width 1920 --height 1080 --frames 10
+# Compute PSNR and MS-SSIM
+./build/rdmeter compute -r ref.yuv -d dist.yuv --width 1920 --height 1080 -m psnr,msssim
+
+# Just PSNR
+./build/rdmeter compute -r ref.yuv -d dist.yuv --width 1920 --height 1080 -m psnr
 ```
 
-## Testing
+## Test with sample video
 
-1. Download a test YUV file to `test_videos/`:
+1. Download test YUV:
    ```bash
    curl -o test_videos/bus.yuv https://engineering.purdue.edu/~reibman/ece634/Videos/YUV_videos/BUS_176x144_15_orig_01.yuv
    ```
 
-2. Create a distorted version:
+2. Create distorted version:
    ```bash
    cd test_videos
    ffmpeg -f rawvideo -pix_fmt yuv420p -s 176x144 -i bus.yuv -c:v libx265 -crf 28 bus_dist.mp4
@@ -36,16 +34,9 @@ From the project root:
    cd ..
    ```
 
-3. Run the tool:
+3. Run:
    ```bash
-   ./build/rdmeter compute --ref test_videos/bus.yuv --dist test_videos/bus_dist.yuv --width 176 --height 144 --frames 10
+   ./build/rdmeter compute -r test_videos/bus.yuv -d test_videos/bus_dist.yuv --width 176 --height 144 -m psnr,msssim
    ```
 
-   Output example:
-   ```
-   Processed 10 frames
-   Average PSNR (Y): 30.9121 dB
-   Processing time: 1 ms
-   ```
-
-Results are saved in `results/results.json`.
+Results saved to `results/results.json`.
